@@ -1,17 +1,29 @@
+import configparser
+
 import aiohttp
 from datetime import datetime, timedelta
 
+from .models.redditor import Redditor
 from .models.subreddit import Subreddits
 
 
-class Reddit():
+class Reddit:
 
-    def __init__(self, client_id, client_secret, username, password, user_agent):
-        self.username = username
-        self.password = password
-        self.client_id = client_id
-        self.client_secret = client_secret
-        self.user_agent = user_agent
+    def __init__(self, praw_key="", client_id="", client_secret="", username="", password="", user_agent=""):
+        if praw_key != "":
+            config = configparser.ConfigParser()
+            config.read("praw.ini")
+            self.username = config[praw_key]["username"]
+            self.password = config[praw_key]["password"]
+            self.client_id = config[praw_key]["client_id"]
+            self.client_secret = config[praw_key]["client_secret"]
+            self.user_agent = config[praw_key]["user_agent"] if "user_agent" in config[praw_key] else user_agent
+        else:
+            self.username = username
+            self.password = password
+            self.client_id = client_id
+            self.client_secret = client_secret
+            self.user_agent = user_agent
 
         self.comment_kind = "t1"
         self.account_kind = "t2"
@@ -28,6 +40,7 @@ class Reddit():
         if self.token_expires <= datetime.now():
             url = "https://www.reddit.com/api/v1/access_token"
             data = {
+                "grant_type": "password",
                 "username": self.username,
                 "password": self.password
             }
@@ -46,10 +59,10 @@ class Reddit():
             "User-Agent": self.user_agent
         }
 
-    async def get_request(self, endpoint, limit, **kwargs):
+    async def get_request(self, endpoint, **kwargs):
         kwargs['raw_json'] = 1
         params = ["{}={}".format(k, kwargs[k]) for k in kwargs]
-        url = "https://oauth.reddit.com{endpoint}?" + '&'.join(params)
+        url = f"https://oauth.reddit.com{endpoint}?" + '&'.join(params)
 
         async with aiohttp.ClientSession() as session:
             headers = await self.get_header()
@@ -77,12 +90,19 @@ class Reddit():
     async def request_post(self, endpoint, data, **kwargs):
         kwargs['raw_json'] = 1
         params = ["{}={}".format(k, kwargs[k]) for k in kwargs]
-        url = "https://oauth.reddit.com{endpoint}?" + '&'.join(params)
+        url = f"https://oauth.reddit.com{endpoint}?" + '&'.join(params)
 
-        async with aiohttp.ClientSession as session:
+        async with aiohttp.ClientSession() as session:
             headers = await self.get_header()
             async with session.post(url, data=data, headers=headers) as resp:
                 return await resp.json()
+
+    async def redditor(self, username):
+        resp = await self.get_request("/user/{}/about".format(username))
+        try:
+            return Redditor(self, resp["data"])
+        except Exception as e:
+            return None
 
     async def message(self, to, subject, text, from_sr=""):
         data = {
@@ -93,3 +113,4 @@ class Reddit():
         if from_sr != "": data["from_sr"] = from_sr
         resp = await self.request_post("/api/compose", data)
         return resp["success"]
+
