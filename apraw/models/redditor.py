@@ -29,5 +29,5 @@ class Redditor:
     def __str__(self):
         return self.name
 
-    async def message(self, subject, text, from_sr=""):
+    async def message(self, subject, text, from_sr=""): # This works for some reason CRAB RAVE
         return await self.reddit.message(self.name, subject, text, from_sr)
