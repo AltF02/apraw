@@ -40,7 +40,7 @@ class ListingGenerator(APRAWBase):
 
         self._listing = self._reddit.get(self.url, params=self.params)
         if isinstance(self._listing, list):
-            self._listing = self._listing[1]  # for submission duplicates
+            self._listing = self._listing[1]  
         elif isinstance(self._listing, dict):
             self._listing = FlairListing(self._reddit, self._listing)
         self._list_index = 0
