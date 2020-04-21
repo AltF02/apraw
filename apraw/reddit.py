@@ -2,12 +2,7 @@ import aiohttp
 
 from .subreddits import Subreddits
 
-<<<<<<< HEAD
 class Reddit():
-=======
-
-class reddit():
->>>>>>> 27ff5a7939b60ffed18c7d5a474cc35e1eb9d942
 
     def __init__(self, client_id, client_secret, username, password, user_agent):
         self.username = username
