@@ -1,7 +1,7 @@
 import aiohttp
 from datetime import datetime, timedelta
 
-from .subreddits import Subreddits
+from .models.subreddit import Subreddits
 
 
 class Reddit():
@@ -42,19 +42,19 @@ class Reddit():
                         raise Exception("Invalid data")
 
         return {
-            "Authorization": f"{self.access_data["token_type"]} {self.access_data["access_token"]}"),
+            "Authorization": f"{self.access_data['token_type']} {self.access_data['access_token']}",
             "User-Agent": self.user_agent
         }
 
     async def get_request(self, endpoint, limit, **kwargs):
         kwargs['raw_json'] = 1
-        params = [f"{kwarg}={kwargs[k]}" for kwarg in kwargs]
+        params = ["{}={}".format(k, kwargs[k]) for k in kwargs]
         url = "https://oauth.reddit.com{endpoint}?" + '&'.join(params)
 
         async with aiohttp.ClientSession() as session:
             headers = await self.get_header()
-            async with session.get()
-
+            async with session.get(url, headers=headers) as resp:
+                return await resp.json()
 
     async def get_listing(self, endpoint, limit, **kwargs):
         last = None
@@ -62,5 +62,25 @@ class Reddit():
             kwargs['limit'] = limit if limit is not None else 100
             if last is not None:
                 kwargs["after"] = last
-            req = await self.
-            # I'll finish this later smgasdjs uh oh stinky poop hahahaa
+            req = await self.get_request(endpoint, **kwargs)
+            if len(req["data"]["children"]) <= 0:
+                break
+            for i in req["data"]["children"]:
+                if i["kind"] in [self.link_kind, self.subreddit_kind]:
+                    last = i["data"]["name"]
+                if limit is not None:
+                    limit -= 1
+                yield i
+            if limit is not None and limit < 1:
+                break
+
+    async def request_post(self, endpoint, data, **kwargs):
+        kwargs['raw_json'] = 1
+        params = ["{}={}".format(k, kwargs[k]) for k in kwargs]
+        url = "https://oauth.reddit.com{endpoint}?" + '&'.join(params)
+
+        async with aiohttp.ClientSession as session:
+            headers = await self.get_header()
+            async with session.post(url, data=data, headers=headers) as resp:
+                return await resp.json()
+
