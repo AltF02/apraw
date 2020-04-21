@@ -29,9 +29,6 @@ class SubredditModeration:
     def __init__(self, subreddit):
         self.subreddit = subreddit
 
-    async def modqueue(self, limit=100, **kwargs):
-        async for
-
 
 class ModeratorRelationship(SubredditRelationship):
 
