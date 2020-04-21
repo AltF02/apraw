@@ -1,4 +1,5 @@
 # Async-Praw
+Asynchronous Python Reddit API Wrapper by DankDumpster, NickOfOlas and BigBoyeMike
 
 ## Goals
 - [ ] Working download for PIP.
