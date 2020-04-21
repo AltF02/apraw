@@ -4,6 +4,7 @@ from ..base import APRAWBase
 
 
 class Listing(APRAWBase):
+    """A listing is a collection of RedditBase instances."""
 
     CHILD_ATTRIBUTE = "children"
 
@@ -23,10 +24,11 @@ class Listing(APRAWBase):
 
 
 class FlairListing(Listing):
+    """Special Listing for handling flair lists."""
 
     CHILD_ATTRIBUTE = "users"
 
     @property
-    def after(self) -> Optional[Any]:
+    async def after(self) -> Optional[Any]:
         """Return the next attribute or None."""
         return getattr(self, "next", None)
