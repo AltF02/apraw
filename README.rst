@@ -1,4 +1,6 @@
-# Async-Praw
+APraw
+=====
+
 Asynchronous Python Reddit API Wrapper by DankDumpster, NickOfOlas and BigBoyeMike
 
 ## Goals
