@@ -1,119 +1,91 @@
-"""
 import configparser
+import os
+from itertools import islice
+from typing import IO, Any, Dict, Generator, Optional, Sequence, Type, Union
 
-import aiohttp
-from datetime import datetime, timedelta
+from aprawcore import (requestor, exceptions)
+from aprawcore.requestor import Requestor
 
-from .models.redditor import Redditor
-from .models.subreddit import Subreddits
+from . import models
+from .exceptions import ClientException
+
+Subreddit = models.Subreddit
+Redditor = models.Redditor
 
 
 class Reddit:
 
-    def __init__(self, praw_key="", client_id="", client_secret="", username="", password="", user_agent=""):
-        if praw_key != "":
-            config = configparser.ConfigParser()
-            config.read("praw.ini")
-            self.username = config[praw_key]["username"]
-            self.password = config[praw_key]["password"]
-            self.client_id = config[praw_key]["client_id"]
-            self.client_secret = config[praw_key]["client_secret"]
-            self.user_agent = config[praw_key]["user_agent"] if "user_agent" in config[praw_key] else user_agent
+    @property
+    def _next_unique(self):
+        value = self._unique_counter
+        self._unique_counter += 1
+        return value
+
+    @property
+    def read_only(self) -> bool:
+        return self._core == self._read_only_core
+
+    @read_only.setter()
+    def read_only(self, value: bool) -> None:
+        if value:
+            self._core = self._read_only_core
+        elif self._authorized_core is None:
+            raise ClientException(
+                "read_only cannot be unset as only the "
+                "ReadOnlyAuthorizer is available."
+            )
         else:
-            self.username = username
-            self.password = password
-            self.client_id = client_id
-            self.client_secret = client_secret
-            self.user_agent = user_agent
+            self._core = self._authorized_core
 
-        self.comment_kind = "t1"
-        self.account_kind = "t2"
-        self.link_kind = "t3"
-        self.message_kind = "t4"
-        self.subreddit_kind = "t5"
-        self.award_kind = "t6"
+    def __enter__(self):
+        return self
 
-        self.subreddits = Subreddits(self)
-        self.access_data = None
-        self.token_expires = datetime.now()
+    def __exit__(self, *_args):
+        """Handle the context manager close."""
 
-    async def get_header(self):
-        if self.token_expires <= datetime.now():
-            url = "https://www.reddit.com/api/v1/access_token"
-            data = {
-                "grant_type": "password",
-                "username": self.username,
-                "password": self.password
-            }
+    def __init__(
+            self,
+            site_name: str = None,
+            requestor_class: Optional[Type[Requestor]] = None,
+            requestor_kwargs: Dict[str, Any] = None,
+            **config_settings: str
+    ):
+        self._core = self._authorized_core = self._read_only_core = None
+        self._objector = None
+        self._unique_counter = 0
 
-            auth = aiohttp.BasicAuth(login=self.client_id, password=self.client_secret)
-            async with aiohttp.ClientSession(auth=auth) as session:
-                async with session.post(url, data=data) as resp:
-                    if resp.status == 200:
-                        self.access_data = await resp.json()
-                        self.token_expires = datetime.now() + timedelta(seconds=self.access_data['expires_in'])
-                    else:
-                        raise Exception("Invalid data")
-
-        return {
-            "Authorization": f"{self.access_data['token_type']} {self.access_data['access_token']}",
-            "User-Agent": self.user_agent
-        }
-
-    async def get_request(self, endpoint, **kwargs):
-        kwargs['raw_json'] = 1
-        params = ["{}={}".format(k, kwargs[k]) for k in kwargs]
-        url = f"https://oauth.reddit.com{endpoint}?" + '&'.join(params)
-
-        async with aiohttp.ClientSession() as session:
-            headers = await self.get_header()
-            async with session.get(url, headers=headers) as resp:
-                return await resp.json()
-
-    async def get_listing(self, endpoint, limit, **kwargs):
-        last = None
-        while True:
-            kwargs['limit'] = limit if limit is not None else 100
-            if last is not None:
-                kwargs["after"] = last
-            req = await self.get_request(endpoint, **kwargs)
-            if len(req["data"]["children"]) <= 0:
-                break
-            for i in req["data"]["children"]:
-                if i["kind"] in [self.link_kind, self.subreddit_kind]:
-                    last = i["data"]["name"]
-                if limit is not None:
-                    limit -= 1
-                yield i
-            if limit is not None and limit < 1:
-                break
-
-    async def request_post(self, endpoint, data, **kwargs):
-        kwargs['raw_json'] = 1
-        params = ["{}={}".format(k, kwargs[k]) for k in kwargs]
-        url = f"https://oauth.reddit.com{endpoint}?" + '&'.join(params)
-
-        async with aiohttp.ClientSession() as session:
-            headers = await self.get_header()
-            async with session.post(url, data=data, headers=headers) as resp:
-                return await resp.json()
-
-    async def redditor(self, username):
-        resp = await self.get_request("/user/{}/about".format(username))
         try:
-            return Redditor(self, resp["data"])
-        except Exception as e:
-            return None
+            config_section = site_name or os.getenv("praw_site") or "DEFAULT"
+            # self.config = Config(config_section, **config_settings)
+        except configparser.NoSectionError as exc:
+            raise exc
 
-    async def message(self, to, subject, text, from_sr=""):
-        data = {
-            "subject": subject,
-            "text": text,
-            "to": to
-        }
-        if from_sr != "": data["from_sr"] = from_sr
-        resp = await self.request_post("/api/compose", data)
-        return resp["success"]
+        required_message = (
+            "Required configuration setting {!r} missing. \n"
+            "This setting can be provided in a praw.ini file, "
+            "as a keyword argument to the `Reddit` class "
+            "constructor, or as an environment variable."
+        )
 
-"""
-# Going to rewrite
+    async def get(self, path: str, params: Optional[Union[str, Dict[str, str]]] = None):
+        data = await self.request("GET", path, params=params)
+        return self._objector.objectify(data)
+
+    async def redditor(self, name: Optional[str] = None, fullname: Optional[str] = None
+                       ) -> Redditor:
+        return models.Redditor(self, name=name, fullname=fullname)
+
+    async def request(
+            self,
+            method: str,
+            path: str,
+            params: Optional[Union[str, Dict[str, str]]] = None,
+            data: Optional[
+                Union[Dict[str, Union[str, Any]], bytes, IO, str]
+            ] = None,
+            files: Optional[Dict[str, IO]] = None,
+    ) -> Any:
+        return await self._core.request(
+            method, path, data=data, files=files, params=params
+        )
+
