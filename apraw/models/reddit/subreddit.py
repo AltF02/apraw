@@ -1,5 +1,5 @@
 import aiohttp
-
+import pylint
 from apraw.models.endpoints import API_PATH
 from apraw.models.listing.generator import ListingGenerator
 
