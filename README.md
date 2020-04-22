@@ -1,7 +1,7 @@
 APraw
 =====
 
-Asynchronous Python Reddit API Wrapper by DankDumpster, NickOfOlas and BigBoyeMike
+Asynchronous Python Reddit API Wrapper by DankDumpster, NickOfOlas, BigBoyeMike, and 99LockeRock
 
 ## Goals
 - [ ] Working download for PIP.
