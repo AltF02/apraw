@@ -1,3 +1,4 @@
+"""
 import configparser
 
 import aiohttp
@@ -114,3 +115,5 @@ class Reddit:
         resp = await self.request_post("/api/compose", data)
         return resp["success"]
 
+"""
+# Going to rewrite
